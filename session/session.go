@@ -63,7 +63,7 @@ func NewSession(client *minecraft.Conn, logger *slog.Logger, registry *Registry,
 
 		processor: NopProcessor{},
 
-		animation: &animation.Dimension{},
+		animation: animation.NopAnimation{},
 		tracker:   newTracker(),
 	}
 	s.ctx, s.cancelFunc = context.WithCancelCause(client.Context())
@@ -362,16 +362,22 @@ func (s *Session) sendGameData(gameData minecraft.GameData) {
 	pos := gameData.PlayerPosition
 	chunkX := int32(pos.X()) >> 4
 	chunkZ := int32(pos.Z()) >> 4
+	cacheEnabled := s.client.ClientCacheEnabled()
 	for x := chunkX - 4; x <= chunkX+4; x++ {
 		for z := chunkZ - 4; z <= chunkZ+4; z++ {
 			_ = s.client.WritePacket(&packet.LevelChunk{
 				Dimension:     gameData.Dimension,
 				Position:      protocol.ChunkPos{x, z},
 				SubChunkCount: 1,
+				CacheEnabled:  cacheEnabled,
 				RawPayload:    chunk,
 			})
 		}
 	}
+	_ = s.client.WritePacket(&packet.NetworkChunkPublisherUpdate{
+		Position: protocol.BlockPos{int32(pos.X()), int32(pos.Y()), int32(pos.Z())},
+		Radius:   64,
+	})
 	s.tracker.mu.Lock()
 	s.tracker.clearEffects(s)
 	s.tracker.clearEntities(s)

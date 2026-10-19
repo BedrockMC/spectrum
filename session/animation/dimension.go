@@ -20,17 +20,20 @@ func (animation *Dimension) Play(conn *minecraft.Conn, serverGameData minecraft.
 	sendDimension(conn, serverGameData, dimension, false)
 }
 
-// Clear ...
+// Clear stops the dimension change animation and safely updates the dimension to the destination.
 func (animation *Dimension) Clear(conn *minecraft.Conn, serverGameData minecraft.GameData) {
-	_ = conn.WritePacket(&packet.PlayStatus{Status: packet.PlayStatusPlayerSpawn})
-	sendDimension(conn, serverGameData, packet.DimensionOverworld, true)
+	sendDimension(conn, serverGameData, serverGameData.Dimension, true)
 }
 
-// sendDimension updates the player's dimension and optionally force-spawns them if playStatus is enabled.
+// sendDimension updates the player's dimension and sends the client-side dimension switch ack
+// using the player's actual entity runtime ID, followed by player spawn if requested.
 func sendDimension(conn *minecraft.Conn, serverGameData minecraft.GameData, dimension int32, playStatus bool) {
 	_ = conn.WritePacket(&packet.ChangeDimension{Dimension: dimension, Position: serverGameData.PlayerPosition})
 	_ = conn.WritePacket(&packet.StopSound{StopAll: true})
-	_ = conn.WritePacket(&packet.PlayerAction{ActionType: protocol.PlayerActionDimensionChangeDone})
+	_ = conn.WritePacket(&packet.PlayerAction{
+		EntityRuntimeID: serverGameData.EntityRuntimeID,
+		ActionType:      protocol.PlayerActionDimensionChangeDone,
+	})
 	if playStatus {
 		_ = conn.WritePacket(&packet.PlayStatus{
 			Status: packet.PlayStatusPlayerSpawn,
